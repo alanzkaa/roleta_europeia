@@ -1,0 +1,1870 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Roleta Europeia — Grand Casino</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Pro:ital,wght@0,300;0,400;0,600;1,300&display=swap" rel="stylesheet">
+<script type="module">
+  import { createClient } from 'https://esm.sh/@libsql/client@0.14.0/web';
+  window.__libsqlCreateClient = createClient;
+</script>
+<style>
+/* ═══════════════════════════════════════════════
+   RESET & TOKENS
+═══════════════════════════════════════════════ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  /* feltro verde — identidade cassino */
+  --felt:       #0b3d1f;
+  --felt2:      #0d4a25;
+  --felt3:      #0f5a2c;
+  --felt-dark:  #071a0e;
+  --felt-deep:  #04100a;
+
+  /* painéis/paineis laterais */
+  --panel:      #080f0a;
+  --panel2:     #0c160e;
+  --panel3:     #111d13;
+
+  /* dourado metálico */
+  --gold:       #c9a84c;
+  --gold2:      #f0c84a;
+  --gold3:      #e8b93a;
+  --gold-glow:  rgba(240,200,74,.45);
+  --gold-dim:   rgba(201,168,76,0.12);
+  --gold-bdr:   rgba(201,168,76,0.22);
+  --gold-bdr2:  rgba(201,168,76,0.45);
+
+  /* cores jogo */
+  --red:        #b52a1c;
+  --red2:       #e03020;
+  --green-num:  #005c20;
+
+  /* texto */
+  --text:       #e8e2d4;
+  --text2:      #a89e8a;
+  --text3:      #4d6055;
+  --text4:      #2e4035;
+
+  /* resultados */
+  --win:        #4ade80;
+  --lose:       #f87171;
+}
+
+html,body{
+  width:100%;height:100%;
+  overflow:hidden;
+  background:var(--felt-dark);
+  color:var(--text);
+  font-family:'Crimson Pro',Georgia,serif;
+}
+
+/* feltro texturizado */
+body::before{
+  content:'';position:fixed;inset:0;
+  background:
+    radial-gradient(ellipse 120% 80% at 60% 50%, rgba(13,74,37,.55) 0%, transparent 70%),
+    url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.07'/%3E%3C/svg%3E");
+  pointer-events:none;z-index:0;
+}
+
+/* ═══════════════════════════════════════════════
+   LAYOUT RAIZ
+   Painel lateral (drawer) sobreposto via position:fixed
+   Área jogo = tela cheia
+═══════════════════════════════════════════════ */
+.app{
+  position:relative;z-index:1;
+  width:100vw;height:100vh;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+
+/* ═══════════════════════════════════════════════
+   SALDO FLUTUANTE — sempre visível
+═══════════════════════════════════════════════ */
+.saldo-widget{
+  position:fixed;top:14px;left:50%;
+  transform:translateX(-50%);
+  z-index:300;
+  background:linear-gradient(135deg,rgba(4,16,10,.95),rgba(8,24,14,.95));
+  border:1px solid var(--gold-bdr2);
+  border-radius:12px;
+  padding:.5rem 1rem .45rem;
+  box-shadow:0 0 0 1px rgba(0,0,0,.6),0 4px 24px rgba(0,0,0,.6),0 0 20px rgba(201,168,76,.08);
+  backdrop-filter:blur(8px);
+  display:flex;flex-direction:column;align-items:center;
+  min-width:140px;
+}
+.saldo-widget-lbl{
+  font-family:'Cinzel',serif;font-size:.44rem;font-weight:600;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--text3);
+  margin-bottom:.18rem;
+}
+.saldo-widget-num{
+  font-family:'Cinzel',serif;font-size:1.5rem;font-weight:900;
+  color:var(--gold2);line-height:1;
+  text-shadow:0 0 24px rgba(240,200,74,.35);
+}
+.saldo-widget-sub{
+  font-size:.5rem;color:var(--text3);margin-top:.14rem;
+  text-align:center;
+}
+.saldo-widget-sync{
+  font-size:.52rem;min-width:1px;margin-top:.08rem;
+  text-align:center;transition:color .3s;
+}
+
+/* ═══════════════════════════════════════════════
+   HEADER SLIM
+═══════════════════════════════════════════════ */
+.hdr{
+  flex-shrink:0;height:44px;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 1.4rem;
+  background:linear-gradient(90deg,var(--panel),var(--panel2),var(--panel));
+  border-bottom:1px solid var(--gold-bdr);
+  position:relative;z-index:10;
+}
+.hdr::after{
+  content:'';position:absolute;bottom:0;left:6%;right:6%;height:1px;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent);
+  opacity:.5;
+}
+.hdr-brand{
+  font-family:'Cinzel',serif;font-size:.9rem;font-weight:900;
+  letter-spacing:.28em;color:var(--gold2);
+  text-shadow:0 0 28px rgba(240,200,74,.4);
+  display:flex;align-items:center;gap:.5rem;
+}
+.hdr-brand span{opacity:.7;font-size:.7rem;letter-spacing:.08em;font-weight:400;}
+.hdr-right{display:flex;align-items:center;gap:1rem;}
+.hdr-edge{font-size:.6rem;color:var(--text3);letter-spacing:.05em;}
+.hdr-edge b{color:var(--gold);}
+#headerUser{font-size:.62rem;color:var(--gold);font-family:'Cinzel',serif;letter-spacing:.07em;}
+.btn-sair{
+  font-family:'Cinzel',serif;font-size:.58rem;font-weight:700;
+  letter-spacing:.08em;color:var(--text2);
+  background:rgba(255,255,255,.03);border:1px solid var(--gold-bdr);
+  border-radius:20px;padding:.22rem .85rem;
+  cursor:pointer;transition:all .16s ease;
+}
+.btn-sair:hover{
+  border-color:var(--gold);color:var(--gold);
+  background:rgba(8,22,14,.9);
+  box-shadow:0 0 10px rgba(201,168,76,.12);
+}
+
+/* ═══════════════════════════════════════════════
+   ÁREA DE JOGO: [mesa apostas] [roleta]
+═══════════════════════════════════════════════ */
+.game-area{
+  flex:1;display:grid;
+  grid-template-columns:1fr 480px;
+  overflow:hidden;
+  position:relative;
+}
+
+/* ──────────────
+   COLUNA ESQUERDA: mesa de apostas
+────────────── */
+.col-bet{
+  display:flex;flex-direction:column;
+  padding:1.2rem 1.4rem 1rem 2rem;
+  gap:.85rem;
+  overflow-y:auto;overflow-x:hidden;
+  background:
+    linear-gradient(180deg, rgba(7,26,14,.0) 0%, rgba(7,26,14,.15) 100%);
+}
+.col-bet::-webkit-scrollbar{width:3px;}
+.col-bet::-webkit-scrollbar-thumb{background:var(--gold-bdr);border-radius:3px;}
+
+/* título da mesa */
+.mesa-titulo{
+  font-family:'Cinzel',serif;font-size:.65rem;font-weight:700;
+  letter-spacing:.3em;text-transform:uppercase;color:var(--gold);
+  text-align:center;
+  padding-bottom:.6rem;
+  border-bottom:1px solid var(--gold-bdr);
+  text-shadow:0 0 16px rgba(201,168,76,.3);
+}
+
+/* input aposta */
+.aposta-input-row{display:flex;align-items:center;gap:.6rem;}
+.aposta-input-lbl{
+  font-size:.68rem;color:var(--text2);white-space:nowrap;
+  font-family:'Cinzel',serif;letter-spacing:.06em;
+}
+.aposta-input{
+  flex:1;
+  background:rgba(4,16,10,.8);
+  border:1px solid var(--gold-bdr2);
+  border-radius:8px;
+  color:var(--gold2);
+  font-family:'Cinzel',serif;font-size:1.05rem;font-weight:700;
+  padding:.38rem .7rem;text-align:right;outline:none;
+  transition:border-color .18s ease, box-shadow .18s ease;
+  box-shadow:inset 0 2px 8px rgba(0,0,0,.4);
+}
+.aposta-input:focus{
+  border-color:var(--gold2);
+  box-shadow:inset 0 2px 8px rgba(0,0,0,.4),0 0 12px rgba(201,168,76,.2);
+}
+.aposta-input::placeholder{color:var(--text4);font-size:.72rem;}
+.aposta-input::-webkit-inner-spin-button,
+.aposta-input::-webkit-outer-spin-button{opacity:.3;}
+.aposta-erro{
+  color:var(--lose);font-size:.62rem;min-height:.8rem;
+  font-family:'Cinzel',serif;letter-spacing:.02em;
+  text-align:right;
+}
+
+/* info aposta atual */
+.aposta-status{
+  display:flex;align-items:center;justify-content:space-between;
+  background:rgba(4,12,8,.6);
+  border:1px solid var(--gold-bdr);
+  border-radius:8px;padding:.42rem .75rem;
+  font-size:.7rem;
+}
+.aposta-status-lbl{color:var(--text3);}
+.aposta-status-val{color:var(--gold2);font-family:'Cinzel',serif;font-weight:700;font-size:.9rem;}
+#betTypeInfo{
+  font-size:.7rem;color:var(--text2);min-height:1rem;
+  padding:.1rem 0;
+}
+#betTypeInfo b{color:var(--text);}
+
+.divider{
+  height:1px;flex-shrink:0;
+  background:linear-gradient(90deg,transparent,var(--gold-bdr2),transparent);
+}
+
+/* ── GRADE DE NÚMEROS ─────────────────────── */
+.numeros-grid{
+  display:grid;
+  grid-template-columns:36px repeat(12,1fr);
+  gap:4px;flex-shrink:0;
+}
+.num-cell{
+  aspect-ratio:1;border-radius:5px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.78rem;font-weight:700;
+  cursor:pointer;
+  border:1px solid transparent;
+  transition:all .12s ease;
+  user-select:none;
+  font-family:'Cinzel',serif;
+  min-width:0;
+  position:relative;
+}
+.num-cell::after{
+  content:'';position:absolute;inset:0;border-radius:5px;
+  background:linear-gradient(135deg,rgba(255,255,255,.07),transparent);
+  pointer-events:none;
+}
+.num-cell:hover{
+  filter:brightness(1.55);
+  border-color:rgba(255,255,255,.55);
+  transform:scale(1.06);
+  box-shadow:0 2px 10px rgba(0,0,0,.5);
+  z-index:2;
+}
+.num-cell.selected{
+  border-color:var(--gold2)!important;
+  box-shadow:0 0 10px rgba(240,200,74,.6),0 0 2px var(--gold2);
+  transform:scale(1.08);
+  z-index:3;
+}
+/* highlighted: números do grupo apostado (cor, par/ímpar, dúzia, etc.) */
+.num-cell.highlighted{
+  border-color:rgba(240,200,74,.55)!important;
+  box-shadow:0 0 7px rgba(240,200,74,.35),inset 0 0 8px rgba(240,200,74,.12);
+  transform:scale(1.04);
+  z-index:2;
+  filter:brightness(1.55);
+}
+.num-cell.v{background:linear-gradient(135deg,#006a28,#004a1a);}
+.num-cell.r{background:linear-gradient(135deg,#8a1208,#5e0b05);}
+.num-cell.p{background:linear-gradient(135deg,#1a1a1a,#0d0d0d);}
+
+.zero-cell{
+  grid-row:1/4;grid-column:1;border-radius:5px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.82rem;font-weight:700;cursor:pointer;
+  background:linear-gradient(180deg,#006a28,#004a1a);
+  border:1px solid transparent;
+  transition:all .12s ease;
+  writing-mode:vertical-lr;letter-spacing:.1em;
+  font-family:'Cinzel',serif;
+  position:relative;
+}
+.zero-cell::after{
+  content:'';position:absolute;inset:0;border-radius:5px;
+  background:linear-gradient(135deg,rgba(255,255,255,.08),transparent);
+  pointer-events:none;
+}
+.zero-cell:hover{
+  filter:brightness(1.5);border-color:rgba(255,255,255,.5);
+  box-shadow:0 2px 10px rgba(0,0,0,.5);
+}
+.zero-cell.selected{
+  border-color:var(--gold2)!important;
+  box-shadow:0 0 10px rgba(240,200,74,.6);
+}
+
+/* ── APOSTAS EXTERNAS ─────────────────────── */
+.ext-bets{display:flex;flex-direction:column;gap:5px;flex-shrink:0;}
+.ext-row{display:grid;gap:4px;}
+.ext-cell{
+  background:linear-gradient(135deg,rgba(6,28,14,.9),rgba(4,18,9,.9));
+  border:1px solid rgba(20,70,35,.8);
+  border-radius:6px;
+  padding:.38rem .3rem;
+  text-align:center;font-size:.68rem;font-weight:700;
+  color:#5aaa72;
+  cursor:pointer;
+  transition:all .12s ease;
+  user-select:none;white-space:nowrap;
+  font-family:'Cinzel',serif;line-height:1.4;
+  position:relative;overflow:hidden;
+}
+.ext-cell::before{
+  content:'';position:absolute;inset:0;
+  background:linear-gradient(135deg,rgba(255,255,255,.04),transparent);
+  pointer-events:none;
+}
+.ext-cell:hover{
+  background:linear-gradient(135deg,rgba(10,40,20,.95),rgba(8,28,14,.95));
+  border-color:var(--gold);color:var(--gold2);
+  box-shadow:0 2px 12px rgba(0,0,0,.4),0 0 8px rgba(201,168,76,.1);
+  transform:translateY(-1px);
+}
+.ext-cell.selected{
+  background:linear-gradient(135deg,rgba(14,50,24,.95),rgba(10,36,18,.95));
+  border-color:var(--gold2);color:var(--gold2);
+  box-shadow:0 0 12px rgba(240,200,74,.35),inset 0 0 8px rgba(240,200,74,.05);
+}
+.ext-cell .odds{
+  font-size:.54rem;color:var(--text3);
+  display:block;font-family:'Crimson Pro',serif;font-weight:400;
+  margin-top:1px;
+}
+.ext-cell.red-c{color:#e07070;}
+.ext-cell.red-c:hover,.ext-cell.red-c.selected{color:var(--gold2);}
+
+/* ── AÇÕES ─────────────────────────────────── */
+.bet-actions{display:flex;gap:.5rem;flex-shrink:0;}
+.btn-sec{
+  flex:1;padding:.42rem .3rem;
+  border:1px solid var(--gold-bdr);
+  border-radius:8px;
+  background:rgba(4,12,8,.7);
+  color:var(--text2);
+  font-size:.68rem;cursor:pointer;
+  transition:all .16s ease;
+  font-family:'Cinzel',serif;letter-spacing:.07em;
+  font-weight:600;
+}
+.btn-sec:hover{
+  border-color:var(--gold);color:var(--gold);
+  background:rgba(8,22,14,.9);
+  box-shadow:0 0 10px rgba(201,168,76,.12);
+}
+
+/* odds badge */
+.odds-badge{
+  display:inline-block;
+  background:rgba(201,168,76,.1);border:1px solid var(--gold-bdr2);
+  border-radius:4px;padding:.08rem .4rem;
+  font-size:.58rem;color:var(--gold);
+  font-family:'Cinzel',serif;margin-left:.35rem;vertical-align:middle;
+}
+
+/* ──────────────
+   COLUNA DIREITA: roleta
+────────────── */
+.col-wheel{
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:.8rem;
+  padding:.8rem 1.6rem .8rem .8rem;
+  position:relative;overflow:hidden;
+  border-left:1px solid var(--gold-bdr);
+}
+
+/* halo de luz atrás da roleta */
+.col-wheel::before{
+  content:'';position:absolute;
+  top:50%;left:50%;transform:translate(-50%,-50%);
+  width:520px;height:520px;border-radius:50%;
+  background:radial-gradient(ellipse,rgba(201,168,76,.06) 0%,transparent 65%);
+  pointer-events:none;
+}
+
+/* ── ROLETA ─────────────────────────────────── */
+.wheel-ring{
+  position:relative;border-radius:50%;
+  padding:10px;
+  background:conic-gradient(
+    #c9a84c 0deg,#3d2404 45deg,
+    #c9a84c 90deg,#3d2404 135deg,
+    #c9a84c 180deg,#3d2404 225deg,
+    #c9a84c 270deg,#3d2404 315deg,
+    #c9a84c 360deg
+  );
+  box-shadow:
+    0 0 0 3px #1a0e00,
+    0 0 0 5px rgba(201,168,76,.2),
+    0 0 60px rgba(201,168,76,.18),
+    0 12px 60px rgba(0,0,0,.85),
+    inset 0 0 30px rgba(0,0,0,.6);
+  flex-shrink:0;
+}
+.ponteiro{
+  position:absolute;top:-4px;left:50%;transform:translateX(-50%);
+  width:0;height:0;
+  border-left:11px solid transparent;
+  border-right:11px solid transparent;
+  border-top:28px solid var(--gold2);
+  filter:drop-shadow(0 3px 8px rgba(0,0,0,.95));
+  z-index:10;
+}
+#roleta{display:block;border-radius:50%;}
+
+/* ── BOTÕES DE AÇÃO ─────────────────────────── */
+.btns-row{
+  display:flex;gap:.6rem;align-items:center;
+  flex-shrink:0;
+}
+#btnGirar{
+  padding:.7rem 2.8rem;
+  font-family:'Cinzel',serif;font-size:1rem;font-weight:900;
+  letter-spacing:.22em;
+  border:none;border-radius:40px;cursor:pointer;
+  background:linear-gradient(135deg,#6a4810 10%,var(--gold2) 50%,#6a4810 90%);
+  color:#120900;
+  box-shadow:
+    0 4px 28px rgba(201,168,76,.45),
+    0 1px 0 rgba(255,255,255,.2) inset,
+    0 -1px 0 rgba(0,0,0,.3) inset;
+  transition:all .2s ease;
+  flex-shrink:0;position:relative;overflow:hidden;
+}
+#btnGirar::after{
+  content:'';position:absolute;top:0;left:-100%;width:55%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent);
+  transition:left .5s ease;
+}
+#btnGirar:hover:not(:disabled)::after{left:160%;}
+#btnGirar:hover:not(:disabled){
+  filter:brightness(1.12);
+  box-shadow:0 6px 38px rgba(201,168,74,.65),0 0 20px rgba(240,200,74,.25);
+  transform:translateY(-1px);
+}
+#btnGirar:active:not(:disabled){transform:translateY(0);filter:brightness(.95);}
+#btnGirar:disabled{opacity:.35;cursor:not-allowed;}
+
+#btnRepetir{
+  padding:.68rem 1.3rem;
+  font-family:'Cinzel',serif;font-size:.78rem;font-weight:700;
+  letter-spacing:.1em;
+  border:1px solid var(--gold-bdr2);border-radius:40px;cursor:pointer;
+  background:rgba(8,22,12,.8);color:var(--gold);
+  box-shadow:0 2px 12px rgba(0,0,0,.35);
+  transition:all .2s ease;flex-shrink:0;
+  opacity:.45;
+}
+#btnRepetir:not(:disabled):hover{
+  border-color:var(--gold2);color:var(--gold2);opacity:1;
+  background:rgba(14,36,20,.9);
+  box-shadow:0 0 14px rgba(201,168,76,.2);
+}
+#btnRepetir:disabled{opacity:.2;cursor:not-allowed;}
+
+/* ── BOLHA RESULTADO ───────────────────────── */
+.rbubble{
+  display:none;align-items:center;justify-content:center;gap:.7rem;
+  font-family:'Cinzel',serif;flex-shrink:0;
+  background:rgba(4,14,8,.8);
+  border:1px solid var(--gold-bdr);
+  border-radius:12px;padding:.55rem 1.1rem;
+  backdrop-filter:blur(4px);
+}
+.rbubble.vis{display:flex;animation:fadeUp .35s ease;}
+@keyframes fadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+.rnum{
+  width:48px;height:48px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1.2rem;font-weight:900;
+  border:2px solid var(--gold);
+}
+.rnum.v{background:var(--green-num);color:#fff;box-shadow:0 0 20px rgba(0,180,70,.5);}
+.rnum.r{background:var(--red);color:#fff;box-shadow:0 0 20px rgba(181,42,28,.5);}
+.rnum.p{background:#181818;color:#fff;border-color:#555;}
+.rlbl{font-size:.78rem;color:var(--text2);line-height:1.6;}
+.rlbl strong{display:block;font-size:.92rem;color:var(--text);}
+
+/* ── PAINEL EDUCACIONAL ─────────────────────── */
+.edu-wrap{width:100%;flex-shrink:0;}
+.edu-panel{
+  background:linear-gradient(135deg,rgba(0,40,14,.95),rgba(0,30,10,.95));
+  border:1px solid rgba(0,120,50,.25);
+  border-radius:9px;padding:.55rem .9rem;
+  font-size:.72rem;color:#7ec898;
+  display:none;line-height:1.6;animation:fadeUp .3s ease;
+}
+.edu-panel.vis{display:block;}
+.edu-panel strong{color:#a8e8b8;}
+.alerta50{
+  background:linear-gradient(135deg,rgba(45,32,0,.95),rgba(32,22,0,.95));
+  border:1px solid rgba(180,140,0,.25);
+  border-radius:9px;padding:.45rem .9rem;
+  font-size:.7rem;color:#c8a833;
+  display:none;animation:fadeUp .3s ease;
+  width:100%;flex-shrink:0;margin-top:.4rem;
+}
+.alerta50.vis{display:block;}
+
+/* ═══════════════════════════════════════════════
+   DRAWER LATERAL (stats + histórico)
+═══════════════════════════════════════════════ */
+.drawer-overlay{
+  position:fixed;inset:0;
+  background:rgba(0,0,0,.45);
+  z-index:190;
+  opacity:0;pointer-events:none;
+  transition:opacity .3s ease;
+}
+.drawer-overlay.open{opacity:1;pointer-events:all;}
+
+.drawer{
+  position:fixed;top:0;left:0;bottom:0;width:280px;
+  z-index:200;
+  background:linear-gradient(180deg,var(--panel),var(--panel2));
+  border-right:1px solid var(--gold-bdr2);
+  display:flex;flex-direction:column;
+  transform:translateX(-100%);
+  transition:transform .32s cubic-bezier(.4,0,.2,1);
+  box-shadow:4px 0 40px rgba(0,0,0,.7),1px 0 0 var(--gold-bdr);
+}
+.drawer.open{transform:translateX(0);}
+
+/* puxador */
+.drawer-tab{
+  position:fixed;top:50%;left:0;
+  transform:translateY(-50%);
+  z-index:201;
+  width:22px;height:72px;
+  background:linear-gradient(180deg,#0d1f12,#0a1810);
+  border:1px solid var(--gold-bdr2);border-left:none;
+  border-radius:0 8px 8px 0;
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  transition:all .2s ease;
+  box-shadow:3px 0 16px rgba(0,0,0,.5);
+}
+.drawer-tab:hover{
+  background:linear-gradient(180deg,#142a18,#0f2014);
+  border-color:var(--gold);
+  box-shadow:3px 0 20px rgba(201,168,76,.15);
+}
+.drawer-tab-icon{
+  display:flex;flex-direction:column;gap:3px;align-items:center;
+}
+.drawer-tab-icon span{
+  display:block;width:3px;height:3px;background:var(--gold);
+  border-radius:50%;opacity:.8;
+}
+.drawer-tab-arrow{
+  font-size:.55rem;color:var(--gold);
+  transition:transform .25s ease;
+  margin-top:4px;
+}
+.drawer.open ~ .drawer-tab .drawer-tab-arrow{transform:scaleX(-1);}
+
+/* conteúdo do drawer */
+.drawer-header{
+  padding:.75rem 1rem .6rem;
+  border-bottom:1px solid var(--gold-bdr);
+  font-family:'Cinzel',serif;font-size:.52rem;font-weight:700;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--gold);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.drawer-close{
+  background:none;border:none;color:var(--text3);cursor:pointer;
+  font-size:.9rem;padding:.1rem .3rem;
+  transition:color .15s;
+}
+.drawer-close:hover{color:var(--gold);}
+
+.drawer-section{
+  border-bottom:1px solid var(--gold-bdr);
+  padding:.6rem .9rem .7rem;
+}
+.drawer-section-lbl{
+  font-family:'Cinzel',serif;font-size:.44rem;font-weight:600;
+  letter-spacing:.22em;text-transform:uppercase;color:var(--text3);
+  margin-bottom:.45rem;
+}
+
+/* stats dentro do drawer */
+.stats2{display:grid;grid-template-columns:1fr 1fr;gap:.32rem;}
+.sbox{
+  background:rgba(255,255,255,.03);
+  border:1px solid var(--gold-bdr);
+  border-radius:6px;padding:.32rem .5rem;
+}
+.sbox .lb{font-size:.5rem;color:var(--text3);line-height:1;margin-bottom:.1rem;}
+.sbox .vl{font-size:.8rem;font-weight:700;font-family:'Cinzel',serif;line-height:1;}
+.pos{color:#4ade80;}.neg{color:#f87171;}.neu{color:var(--gold);}
+
+/* histórico dentro do drawer */
+.hist-inner{
+  overflow-y:auto;display:flex;flex-direction:column;gap:.22rem;
+  flex:1;padding:.4rem .9rem .6rem;
+}
+.hist-inner::-webkit-scrollbar{width:2px;}
+.hist-inner::-webkit-scrollbar-thumb{background:var(--gold-bdr2);border-radius:2px;}
+.hrow{
+  display:flex;align-items:center;gap:.45rem;
+  background:rgba(255,255,255,.03);
+  border:1px solid var(--gold-bdr);
+  border-radius:5px;padding:.26rem .5rem;
+  animation:sli .2s ease;
+}
+@keyframes sli{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+.hball{
+  width:22px;height:22px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.6rem;font-weight:700;font-family:'Cinzel',serif;flex-shrink:0;
+}
+.hball.v{background:var(--green-num);}.hball.r{background:var(--red);}
+.hball.p{background:#181818;border:1px solid #444;}
+.hrnd{font-size:.58rem;color:var(--text3);flex:1;}
+.hval{font-size:.68rem;font-weight:700;font-family:'Cinzel',serif;}
+.hval.g{color:#4ade80;}.hval.l{color:#f87171;}
+
+/* ═══════════════════════════════════════════════
+   OVERLAYS
+═══════════════════════════════════════════════ */
+.flash{position:fixed;inset:0;pointer-events:none;z-index:50;opacity:0;transition:opacity .15s ease;}
+.flash.ganho{background:radial-gradient(ellipse at center,rgba(0,220,80,.14),transparent 68%);opacity:1;}
+.flash.perda{background:radial-gradient(ellipse at center,rgba(220,40,30,.13),transparent 68%);opacity:1;}
+
+.gameover{
+  display:none;position:fixed;inset:0;
+  background:rgba(0,0,0,.93);z-index:500;
+  align-items:center;justify-content:center;padding:1rem;
+}
+.gameover.vis{display:flex;}
+.go-box{
+  background:linear-gradient(135deg,var(--panel3),var(--panel));
+  border:1px solid var(--red);border-radius:16px;
+  padding:1.8rem;max-width:460px;width:100%;
+  text-align:center;animation:fadeUp .4s ease;
+  box-shadow:0 0 60px rgba(0,0,0,.9);
+}
+.go-box h2{font-family:'Cinzel',serif;font-size:1.35rem;color:#f87171;margin-bottom:.45rem;}
+.go-stats{
+  background:rgba(255,255,255,.03);border:1px solid var(--gold-bdr);
+  border-radius:9px;padding:.8rem;margin:.7rem 0;
+  text-align:left;font-size:.8rem;line-height:2;color:var(--text2);
+}
+.go-stats b{color:var(--text);}
+.go-edu{
+  background:rgba(0,35,12,.7);border:1px solid rgba(0,90,35,.3);
+  border-radius:9px;padding:.75rem;margin:.7rem 0;
+  font-size:.74rem;color:#66aa77;text-align:left;line-height:1.75;
+}
+.btn-rei{
+  width:100%;padding:.7rem;border:none;border-radius:10px;
+  background:linear-gradient(135deg,#6a4810,var(--gold2));
+  color:#120900;font-size:.9rem;font-weight:900;cursor:pointer;
+  margin-top:.4rem;font-family:'Cinzel',serif;letter-spacing:.12em;
+}
+.btn-rei:hover{filter:brightness(1.1);}
+
+/* ═══════════════════════════════════════════════
+   CONFIRMAÇÃO DE SAÍDA (logout)
+   Reaproveita .gameover / .go-box / .go-stats
+   (mesmas cores, bordas e animação da tela "Saldo Esgotado")
+═══════════════════════════════════════════════ */
+.sair-actions{display:flex;gap:.6rem;margin-top:.4rem;}
+.btn-cancelar{
+  flex:1;padding:.7rem;border:1px solid var(--gold-bdr);border-radius:10px;
+  background:rgba(4,12,8,.7);color:var(--text2);
+  font-family:'Cinzel',serif;font-size:.82rem;font-weight:700;letter-spacing:.06em;
+  cursor:pointer;transition:all .16s ease;
+}
+.btn-cancelar:hover{
+  border-color:var(--gold);color:var(--gold);
+  background:rgba(8,22,14,.9);
+  box-shadow:0 0 10px rgba(201,168,76,.12);
+}
+.btn-confirmar-saida{
+  flex:1;padding:.7rem;border:none;border-radius:10px;
+  background:linear-gradient(135deg,#6a4810,var(--gold2));
+  color:#120900;font-size:.82rem;font-weight:900;cursor:pointer;
+  font-family:'Cinzel',serif;letter-spacing:.06em;
+  transition:filter .18s,transform .12s;
+}
+.btn-confirmar-saida:hover{filter:brightness(1.12);transform:translateY(-1px);}
+
+/* ═══════════════════════════════════════════════
+   LOGIN OVERLAY
+═══════════════════════════════════════════════ */
+#loginOverlay{
+  position:fixed;inset:0;z-index:1000;
+  background:rgba(0,0,0,.92);
+  display:flex;align-items:center;justify-content:center;
+  backdrop-filter:blur(6px);
+}
+.login-box{
+  background:linear-gradient(135deg,var(--panel3),var(--panel));
+  border:1px solid var(--gold-bdr2);
+  border-radius:18px;
+  padding:2.4rem 2rem 2rem;
+  max-width:380px;width:90%;
+  box-shadow:0 0 80px rgba(0,0,0,.9),0 0 30px rgba(201,168,76,.08);
+  display:flex;flex-direction:column;align-items:center;gap:1.1rem;
+}
+.login-logo{
+  font-family:'Cinzel',serif;font-size:1.05rem;font-weight:900;
+  letter-spacing:.28em;color:var(--gold2);
+  text-shadow:0 0 28px rgba(240,200,74,.4);
+  text-align:center;
+}
+.login-logo small{
+  display:block;font-size:.52rem;font-weight:400;
+  letter-spacing:.18em;color:var(--text3);margin-top:.3rem;
+}
+.login-sep{width:60%;height:1px;background:linear-gradient(90deg,transparent,var(--gold-bdr2),transparent);}
+.login-label{
+  align-self:flex-start;
+  font-family:'Cinzel',serif;font-size:.55rem;font-weight:600;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--text3);
+  margin-bottom:-.6rem;
+}
+.login-input{
+  width:100%;
+  background:rgba(4,16,10,.85);
+  border:1px solid var(--gold-bdr2);
+  border-radius:9px;
+  color:var(--gold2);
+  font-family:'Cinzel',serif;font-size:.95rem;font-weight:600;
+  padding:.6rem .9rem;outline:none;
+  transition:border-color .18s,box-shadow .18s;
+  box-shadow:inset 0 2px 8px rgba(0,0,0,.4);
+}
+.login-input:focus{
+  border-color:var(--gold2);
+  box-shadow:inset 0 2px 8px rgba(0,0,0,.4),0 0 14px rgba(201,168,76,.2);
+}
+.login-input::placeholder{color:var(--text4);font-size:.7rem;}
+.login-btn{
+  width:100%;padding:.7rem;border:none;border-radius:10px;
+  background:linear-gradient(135deg,#6a4810,var(--gold2));
+  color:#120900;font-size:.9rem;font-weight:900;cursor:pointer;
+  font-family:'Cinzel',serif;letter-spacing:.12em;
+  transition:filter .18s,transform .12s;
+  margin-top:.2rem;
+}
+.login-btn:hover:not(:disabled){filter:brightness(1.12);transform:translateY(-1px);}
+.login-btn:disabled{opacity:.45;cursor:not-allowed;}
+.login-erro{
+  color:#f87171;font-size:.72rem;text-align:center;
+  min-height:.9rem;font-family:'Cinzel',serif;
+}
+.login-aviso{
+  font-size:.6rem;color:var(--text3);text-align:center;line-height:1.6;
+  border-top:1px solid var(--gold-bdr);
+  padding-top:.7rem;width:100%;
+}
+/* ═══════════════════════════════════════════════
+   PAINEL ADMIN (oculto, abre via console)
+═══════════════════════════════════════════════ */
+#adminPanel{
+  display:none;
+  position:fixed;bottom:24px;right:24px;z-index:900;
+  background:linear-gradient(135deg,#0a1a0e,#060e08);
+  border:1px solid var(--gold-bdr2);
+  border-radius:14px;padding:1.1rem 1.2rem 1rem;
+  min-width:260px;
+  box-shadow:0 0 0 1px rgba(0,0,0,.7),0 8px 40px rgba(0,0,0,.8),0 0 24px rgba(201,168,76,.1);
+  backdrop-filter:blur(10px);
+  font-family:'Cinzel',serif;
+}
+#adminPanel.vis{ display:block; animation:fadeUp .25s ease; }
+.adm-title{
+  font-size:.5rem;font-weight:700;letter-spacing:.25em;
+  text-transform:uppercase;color:var(--gold);
+  margin-bottom:.75rem;display:flex;align-items:center;gap:.4rem;
+}
+.adm-row{ display:flex;flex-direction:column;gap:.28rem;margin-bottom:.7rem; }
+.adm-lbl{ font-size:.48rem;letter-spacing:.12em;color:var(--text3); }
+.adm-input{
+  background:rgba(4,16,10,.9);
+  border:1px solid var(--gold-bdr2);border-radius:7px;
+  color:var(--gold2);font-family:'Cinzel',serif;
+  font-size:.95rem;font-weight:700;
+  padding:.4rem .7rem;outline:none;width:100%;
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.4);
+  transition:border-color .15s,box-shadow .15s;
+}
+.adm-input:focus{
+  border-color:var(--gold2);
+  box-shadow:inset 0 2px 6px rgba(0,0,0,.4),0 0 10px rgba(240,200,74,.2);
+}
+.adm-btns{ display:flex;gap:.5rem;margin-top:.2rem; }
+.adm-btn{
+  flex:1;padding:.42rem .3rem;border:none;border-radius:8px;
+  font-family:'Cinzel',serif;font-size:.6rem;font-weight:700;
+  letter-spacing:.08em;cursor:pointer;transition:filter .15s;
+}
+.adm-btn-save{
+  background:linear-gradient(135deg,#4a3208,var(--gold2));color:#120900;
+}
+.adm-btn-save:hover{ filter:brightness(1.12); }
+.adm-btn-close{
+  background:rgba(255,255,255,.05);border:1px solid var(--gold-bdr);
+  color:var(--text2);
+}
+.adm-btn-close:hover{ border-color:var(--gold);color:var(--gold); }
+.adm-status{
+  font-size:.58rem;text-align:center;min-height:.85rem;
+  margin-top:.4rem;color:var(--text3);
+}
+</style>
+</head>
+<body>
+
+<!-- LOGIN OVERLAY -->
+<div id="loginOverlay" style="display:none;">
+  <div class="login-box">
+    <div class="login-logo">GRAND CASINO<small>Roleta Europeia — Simulação Educativa</small></div>
+    <div class="login-sep"></div>
+    <div class="login-label">Nome de usuário</div>
+    <input
+      class="login-input"
+      id="loginNome"
+      type="text"
+      placeholder="seu_usuario"
+      autocomplete="off"
+      onkeydown="if(event.key==='Enter')tentarLogin()"
+    />
+    <div class="login-erro" id="loginErro"></div>
+    <button class="login-btn" id="loginBtn" onclick="tentarLogin()">Entrar</button>
+    <div class="login-aviso">
+      Acesso permitido somente a usuários cadastrados.<br>
+      Sem conta? Fale com o administrador do sistema.
+    </div>
+  </div>
+</div>
+
+<div class="flash" id="flash"></div>
+
+<!-- GAME OVER -->
+<div class="gameover" id="goTela">
+  <div class="go-box">
+    <h2>Saldo Esgotado</h2>
+    <p style="color:var(--text3);font-size:.82rem;">Você perdeu todo o saldo inicial.</p>
+    <div class="go-stats" id="goStats"></div>
+    <div class="go-edu">
+      <strong style="color:#99cc88;display:block;margin-bottom:.35rem;">O que isso nos ensina?</strong>
+      A vantagem da casa na roleta europeia é de <strong>2,70%</strong> nas apostas simples — nos números e dúzias aplicamos um payout ajustado que resulta em ~3% de margem total.
+      Apostas conservadoras prolongam o jogo, mas não eliminam a perda acumulada.
+      Jogos de azar são projetados para beneficiar quem os oferece.
+    </div>
+    <button class="btn-rei" onclick="reiniciar()">Recomeçar</button>
+  </div>
+</div>
+
+<!-- CONFIRMAÇÃO DE SAÍDA (logout) — mesmo padrão visual da tela "Saldo Esgotado" -->
+<div class="gameover" id="sairTela">
+  <div class="go-box">
+    <h2>Encerrar Sessão</h2>
+    <p style="color:var(--text3);font-size:.82rem;">Deseja realmente sair da sua conta?</p>
+    <div class="go-stats" id="sairStats"></div>
+    <div class="sair-actions">
+      <button class="btn-cancelar" onclick="cancelarSaida()">Cancelar</button>
+      <button class="btn-confirmar-saida" onclick="confirmarSaida()">Sair da Conta</button>
+    </div>
+  </div>
+</div>
+
+<!-- SALDO WIDGET FLUTUANTE -->
+<div class="saldo-widget">
+  <div class="saldo-widget-lbl">Saldo</div>
+  <div class="saldo-widget-num" id="saldoTxt">R$&nbsp;1.000,00</div>
+  <div id="saldoSub" style="display:none;"></div>
+  <div id="syncStatus" style="display:none;"></div>
+</div>
+
+<!-- DRAWER LATERAL (stats + histórico) -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="fecharDrawer()"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-header">
+    <span>Estatísticas &amp; Histórico</span>
+    <button class="drawer-close" onclick="fecharDrawer()">×</button>
+  </div>
+
+  <div class="drawer-section">
+    <div class="drawer-section-lbl">Sessão atual</div>
+    <div class="stats2">
+      <div class="sbox"><div class="lb">Apostado</div><div class="vl neu" id="stApostado">R$0</div></div>
+      <div class="sbox"><div class="lb">Ganho</div><div class="vl pos" id="stGanho">R$0</div></div>
+      <div class="sbox"><div class="lb">Perdido</div><div class="vl neg" id="stPerdido">R$0</div></div>
+      <div class="sbox"><div class="lb">Lucro</div><div class="vl" id="stLucro">R$0</div></div>
+      <div class="sbox"><div class="lb">Rodadas</div><div class="vl neu" id="stRodadas">0</div></div>
+      <div class="sbox"><div class="lb">Acerto</div><div class="vl neu" id="stTaxa">0%</div></div>
+    </div>
+  </div>
+
+  <div class="hist-inner" id="histList">
+    <div style="font-size:.62rem;color:var(--text3);padding:.15rem 0;">Nenhuma rodada ainda.</div>
+  </div>
+</aside>
+
+<!-- PUXADOR DO DRAWER -->
+<div class="drawer-tab" id="drawerTab" onclick="toggleDrawer()">
+  <div class="drawer-tab-icon">
+    <span></span><span></span><span></span>
+    <div class="drawer-tab-arrow">▶</div>
+  </div>
+</div>
+
+<!-- APP PRINCIPAL -->
+<div class="app">
+
+  <!-- HEADER -->
+  <header class="hdr">
+    <div class="hdr-brand">ROLETA EUROPEIA <span>Grand Casino</span></div>
+    <div class="hdr-right">
+      <span id="headerUser"></span>
+      <button id="btnSair" class="btn-sair" onclick="mostrarTelaSair()">Sair</button>
+      <div class="hdr-edge">House edge: <b>~3%</b></div>
+    </div>
+  </header>
+
+  <!-- ÁREA DE JOGO -->
+  <div class="game-area">
+
+    <!-- ESQUERDA: mesa de apostas -->
+    <div class="col-bet">
+      <div class="mesa-titulo">Mesa de Apostas</div>
+
+      <!-- valor da aposta -->
+      <div class="aposta-input-row">
+        <span class="aposta-input-lbl">Valor (R$):</span>
+        <input
+          class="aposta-input"
+          id="apostaInput"
+          type="number"
+          min="1"
+          step="1"
+          inputmode="numeric"
+          placeholder="mín. R$ 1"
+          oninput="onApostaInputChange()"
+          onkeydown="bloquearCentavos(event)"
+          onpaste="setTimeout(onApostaInputChange,0)"
+        />
+      </div>
+      <div class="aposta-erro" id="apostaErro"></div>
+
+      <div class="aposta-status">
+        <span class="aposta-status-lbl">Aposta atual</span>
+        <span class="aposta-status-val" id="apostaTxt">R$&nbsp;0,00</span>
+      </div>
+      <div id="betTypeInfo"><span style="color:var(--text3);">Nenhuma selecionada</span></div>
+
+      <div class="divider"></div>
+
+      <!-- grade de números -->
+      <div class="numeros-grid" id="numerosGrid"></div>
+      <div class="ext-bets" id="extBets"></div>
+
+      <div class="divider"></div>
+
+      <div class="bet-actions">
+        <button class="btn-sec" onclick="limparAposta()">Limpar</button>
+        <button class="btn-sec" onclick="dobrarAposta()">×2 Dobrar</button>
+      </div>
+    </div>
+
+    <!-- DIREITA: roleta -->
+    <div class="col-wheel">
+      <div class="wheel-ring">
+        <div class="ponteiro"></div>
+        <canvas id="roleta" width="420" height="420"></canvas>
+      </div>
+
+      <div class="btns-row">
+        <button id="btnGirar" onclick="girar()">GIRAR</button>
+        <button id="btnRepetir" onclick="repetirAposta()" disabled title="Repetir última aposta">Repetir</button>
+      </div>
+
+      <div class="rbubble" id="rbubble">
+        <div class="rnum" id="rnum"></div>
+        <div class="rlbl" id="rlbl"></div>
+      </div>
+
+      <div class="edu-wrap">
+        <div class="edu-panel" id="eduPanel"></div>
+        <div class="alerta50" id="alerta50">
+          <strong>Alerta:</strong> Você perdeu mais de 50% do saldo inicial. A vantagem da casa age em <em>todas</em> as rodadas.
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /game-area -->
+</div><!-- /app -->
+
+<script>
+// ---- CONSTANTES ----
+const SALDO_INI = 1000, MAX_HIST = 30, DURACAO = 5200;
+const SEQ = [0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+const VERMELHOS = new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+const LINHAS_MESA = [
+  [3,6,9,12,15,18,21,24,27,30,33,36],
+  [2,5,8,11,14,17,20,23,26,29,32,35],
+  [1,4,7,10,13,16,19,22,25,28,31,34]
+];
+
+// Margem da casa: 3% aplicada nos payouts (não nas probabilidades reais)
+// Payout justo seria: 1/prob - 1. Com margem de 3% a casa fica: payout * (1 - margem)
+// Número: prob 1/37 → payout justo 35:1 → com margem 3% → 33.95:1
+// Dúzia:  prob 12/37 → payout justo 2.083:1 → com 3% → 1.94:1 ≈ 2:1 (ajustado)
+// 1:1:    prob 18/37 → zero já gera ~2.7% de edge, próximo de 3% — mantemos 1:1
+// Na prática a margem da casa surge do 0: para apostas simples ele "come" o valor.
+// Para números e dúzias, reduzimos o payout para refletir exatamente 3% de margem
+const HOUSE_EDGE = 0.05;
+
+function corNum(n) { return n===0?'v':VERMELHOS.has(n)?'r':'p'; }
+function corCanvas(n) { return n===0?'#005a22':VERMELHOS.has(n)?'#7a1410':'#111111'; }
+
+// ---- ESTADO ----
+let saldo = SALDO_INI, girando = false, angAtual = 0;
+let fichaVal = 5, apostas = [], historico = [];
+let stApostado = 0, stGanho = 0, stPerdido = 0, stRodadas = 0, stAcertos = 0, alerta50Shown = false;
+let ultimaAposta = null; // guarda a última aposta para o botão Repetir
+let apostaErroTmr = null; // timer da mensagem de erro de "aposta com centavos"
+
+// ---- CANVAS ----
+const canvas = document.getElementById('roleta'), ctx = canvas.getContext('2d');
+const CX = canvas.width/2, CY = canvas.height/2, R = CX-4, Ri = R*.33;
+const FATIA = (2*Math.PI)/SEQ.length;
+
+function getNumerosCobertosAtual(){
+  if(!apostas.length) return new Set();
+  const s = new Set();
+  apostas.forEach(a=>{ numerosCobertos(a).forEach(n=>s.add(n)); });
+  return s;
+}
+
+function desenharRoleta(ang) {
+  const cobertos = getNumerosCobertosAtual();
+  const temAposta = cobertos.size > 0;
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.save(); ctx.translate(CX,CY); ctx.rotate(ang);
+
+  for(let i=0;i<SEQ.length;i++){
+    const n=SEQ[i], a0=i*FATIA-Math.PI/2, a1=a0+FATIA;
+    const hl = temAposta && cobertos.has(n) && n!==0;
+    const dim = temAposta && !cobertos.has(n);
+
+    ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,a0,a1);ctx.closePath();
+
+    // Cor base + escurecimento para os não-apostados
+    if(dim){
+      ctx.fillStyle = n===0?'#002e12': VERMELHOS.has(n)?'#3a0604':'#080808';
+    } else {
+      ctx.fillStyle = corCanvas(n);
+    }
+    ctx.fill();
+
+    // Anel de destaque dourado nos números apostados
+    if(hl){
+      ctx.save();
+      ctx.beginPath();ctx.moveTo(0,0);ctx.arc(0,0,R,a0,a1);ctx.closePath();
+      ctx.fillStyle='rgba(240,200,74,0.22)';ctx.fill();
+      ctx.strokeStyle='rgba(240,200,74,0.9)';ctx.lineWidth=2.2;ctx.stroke();
+      ctx.restore();
+    } else {
+      ctx.strokeStyle='rgba(201,168,76,0.55)';ctx.lineWidth=0.6;ctx.stroke();
+    }
+
+    // Texto do número
+    ctx.save();ctx.rotate(a0+FATIA/2);
+    ctx.textAlign='right';ctx.textBaseline='middle';
+    ctx.font=`700 ${Math.round(R*.1)}px 'Cinzel',serif`;
+    ctx.fillStyle = dim ? 'rgba(255,255,255,0.22)' : hl ? '#f0c84a' : '#fff';
+    ctx.shadowColor='rgba(0,0,0,.95)';ctx.shadowBlur = hl ? 0 : 4;
+    if(hl){ ctx.shadowColor='rgba(240,200,74,0.8)'; ctx.shadowBlur=6; }
+    ctx.fillText(n,R-5,0);ctx.restore();
+  }
+
+  ctx.beginPath();ctx.arc(0,0,R,0,Math.PI*2);ctx.strokeStyle='#c9a84c';ctx.lineWidth=2;ctx.stroke();
+  ctx.beginPath();ctx.arc(0,0,R*.87,0,Math.PI*2);ctx.strokeStyle='rgba(201,168,76,.2)';ctx.lineWidth=1;ctx.stroke();
+  ctx.beginPath();ctx.arc(0,0,Ri,0,Math.PI*2);
+  const gr=ctx.createRadialGradient(0,0,0,0,0,Ri);
+  gr.addColorStop(0,'#1e2535');gr.addColorStop(1,'#0c0f18');
+  ctx.fillStyle=gr;ctx.fill();ctx.strokeStyle='#c9a84c';ctx.lineWidth=1.5;ctx.stroke();
+  ctx.restore();
+}
+
+// ---- AUDIO ----
+let audioCtx=null,cliqueTmr=null;
+function getAudio(){if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();return audioCtx;}
+function tocarGiro(dur){try{const ac=getAudio(),buf=ac.createBuffer(1,ac.sampleRate*dur,ac.sampleRate),d=buf.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=(Math.random()*2-1)*.15;const src=ac.createBufferSource();src.buffer=buf;const bpf=ac.createBiquadFilter();bpf.type='bandpass';bpf.frequency.setValueAtTime(800,ac.currentTime);bpf.frequency.linearRampToValueAtTime(200,ac.currentTime+dur);bpf.Q.value=3;const g=ac.createGain();g.gain.setValueAtTime(1,ac.currentTime);g.gain.linearRampToValueAtTime(0,ac.currentTime+dur);src.connect(bpf);bpf.connect(g);g.connect(ac.destination);src.start();}catch(e){}}
+function iniciarCliques(dur){let intv=120;function cl(){try{const ac=getAudio(),osc=ac.createOscillator(),g=ac.createGain();osc.type='triangle';osc.frequency.value=1200+Math.random()*600;g.gain.setValueAtTime(.18,ac.currentTime);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+.06);osc.connect(g);g.connect(ac.destination);osc.start();osc.stop(ac.currentTime+.06);}catch(e){}intv=Math.min(intv*1.18,900);if(intv<dur*1000)cliqueTmr=setTimeout(cl,intv);}cl();}
+function tocarGanho(){try{const ac=getAudio();[0,.1,.2].forEach((d,i)=>{const o=ac.createOscillator(),g=ac.createGain();o.type='sine';o.frequency.value=[523,659,784][i];g.gain.setValueAtTime(.25,ac.currentTime+d);g.gain.exponentialRampToValueAtTime(.001,ac.currentTime+d+.3);o.connect(g);g.connect(ac.destination);o.start(ac.currentTime+d);o.stop(ac.currentTime+d+.35);});}catch(e){}}
+function tocarPerda(){try{const ac=getAudio(),o=ac.createOscillator(),g=ac.createGain();o.type='sawtooth';o.frequency.setValueAtTime(300,ac.currentTime);o.frequency.linearRampToValueAtTime(120,ac.currentTime+.4);g.gain.setValueAtTime(.2,ac.currentTime);g.gain.linearRampToValueAtTime(0,ac.currentTime+.4);o.connect(g);g.connect(ac.destination);o.start();o.stop(ac.currentTime+.45);}catch(e){}}
+
+// ---- MESA ----
+function construirMesa(){
+  const grid=document.getElementById('numerosGrid');grid.innerHTML='';
+  const z=document.createElement('div');z.className='zero-cell';z.textContent='0';z.onclick=()=>adicionarAposta('numero',0);grid.appendChild(z);
+  LINHAS_MESA.forEach(l=>l.forEach(n=>{
+    const c=document.createElement('div');c.className='num-cell '+corNum(n);c.textContent=n;c.id='nc'+n;c.onclick=()=>adicionarAposta('numero',n);grid.appendChild(c);
+  }));
+  const ext=document.getElementById('extBets');ext.innerHTML='';
+  const dr=document.createElement('div');dr.className='ext-row';dr.style.gridTemplateColumns='repeat(3,1fr)';
+  [['1ª Dúzia','duzia',1],['2ª Dúzia','duzia',2],['3ª Dúzia','duzia',3]].forEach(([t,tp,p])=>{
+    const c=document.createElement('div');c.className='ext-cell';c.id='ext_duzia_'+p;
+    // Dúzia: prob 12/37=32.43%, payout justo 2:1, com 3% margem casa: lucro = valor*2*0.97 = 1.94:1
+    c.innerHTML=t+'<span class="odds">1.94:1</span>';
+    c.onclick=()=>adicionarAposta(tp,p);dr.appendChild(c);
+  });
+  ext.appendChild(dr);
+  const mr=document.createElement('div');mr.className='ext-row';mr.style.gridTemplateColumns='repeat(6,1fr)';
+  [
+    ['1–18','baixoalto',1,'0.97:1',false],
+    ['Par','parimpar','par','0.97:1',false],
+    ['Verm.','cor','vermelho','0.97:1',true],
+    ['Preto','cor','preto','0.97:1',false],
+    ['Ímpar','parimpar','impar','0.97:1',false],
+    ['19–36','baixoalto',2,'0.97:1',false]
+  ].forEach(([t,tp,p,od,r])=>{
+    const c=document.createElement('div');c.className='ext-cell'+(r?' red-c':'');
+    c.id='ext_'+tp+'_'+p;c.innerHTML=t+'<span class="odds">'+od+'</span>';
+    c.onclick=()=>adicionarAposta(tp,p);mr.appendChild(c);
+  });
+  ext.appendChild(mr);
+}
+
+// ---- APOSTAS ----
+
+// Exibe a mensagem de erro de "centavos não permitidos" por alguns segundos
+function avisarErroAposta(msg){
+  const erroEl = document.getElementById('apostaErro');
+  if(!erroEl) return;
+  erroEl.textContent = msg;
+  clearTimeout(apostaErroTmr);
+  apostaErroTmr = setTimeout(()=>{ erroEl.textContent=''; }, 4000);
+}
+
+// Bloqueia a digitação de ponto/vírgula no campo de aposta.
+// As apostas são sempre valores INTEIROS — centavos não são permitidos.
+function bloquearCentavos(event){
+  if(event.key==='.' || event.key===',' || event.key==='Decimal'){
+    event.preventDefault();
+    avisarErroAposta('Apostas não aceitam centavos. Use apenas valores inteiros (ex.: 10, 50, 100).');
+  }
+}
+
+// Lê o valor do input — sempre INT (sem centavos), mínimo 0
+function getValorInput(){
+  const el = document.getElementById('apostaInput');
+  const v = parseInt(el.value, 10);
+  return isNaN(v) ? 0 : Math.max(0, v);
+}
+
+function onApostaInputChange(){
+  const el = document.getElementById('apostaInput');
+
+  // Sanitiza valores com ponto/vírgula que tenham passado pelo bloqueio de tecla
+  // (ex.: colar texto, autocompletar do navegador)
+  if(el.value.indexOf('.')!==-1 || el.value.indexOf(',')!==-1){
+    el.value = el.value.replace(/[.,].*$/,'');
+    avisarErroAposta('Apostas não aceitam centavos. Use apenas valores inteiros (ex.: 10, 50, 100).');
+  }
+
+  // Se já há aposta selecionada, atualiza o valor dela (sempre inteiro)
+  if(apostas.length){
+    const v = getValorInput();
+    apostas[0].valor = v;
+    atualizarMesaVisual();
+  }
+}
+
+function adicionarAposta(tipo, param){
+  if(girando) return;
+  const el = document.getElementById('apostaInput');
+
+  // Garantia extra: nenhuma aposta com centavos chega a ser registrada
+  if(el.value.indexOf('.')!==-1 || el.value.indexOf(',')!==-1){
+    avisarErroAposta('Apostas não aceitam centavos. Use apenas valores inteiros (ex.: 10, 50, 100).');
+    el.focus();
+    return;
+  }
+
+  const v = getValorInput();
+  if(v < 1){
+    alert('Valor mínimo de aposta: R$ 1,00. Informe o valor antes de selecionar.');
+    el.focus();
+    return;
+  }
+  if(!Number.isInteger(v)){
+    avisarErroAposta('Apostas não aceitam centavos. Use apenas valores inteiros (ex.: 10, 50, 100).');
+    return;
+  }
+  if(v > saldo){ alert('Saldo insuficiente.'); return; }
+  apostas = [{tipo, param, valor: v}];
+  atualizarMesaVisual();
+}
+
+function limparAposta(){
+  if(girando) return;
+  apostas = [];
+  clearTimeout(apostaErroTmr);
+  const erroEl = document.getElementById('apostaErro');
+  if(erroEl) erroEl.textContent = '';
+  atualizarMesaVisual();
+}
+
+function dobrarAposta(){
+  if(girando || !apostas.length) return;
+  const a = apostas[0];
+  // Math.floor garante valor inteiro mesmo se o saldo tiver fração
+  // (ex.: originada de um payout de dúzia, que paga 1.9x)
+  const novoValor = Math.floor(Math.min(a.valor*2, saldo));
+  if(novoValor <= 0) return;
+  a.valor = novoValor;
+  // Atualiza input também
+  document.getElementById('apostaInput').value = a.valor;
+  atualizarMesaVisual();
+}
+
+// Repete a última aposta registrada
+function repetirAposta(){
+  if(girando || !ultimaAposta) return;
+  const ua = ultimaAposta;
+  const v = Math.floor(ua.valor); // garante INT (defesa extra)
+  if(v < 1) return;
+  if(v > saldo){ alert('Saldo insuficiente para repetir a aposta.'); return; }
+  // Restaura input e aposta
+  document.getElementById('apostaInput').value = v;
+  apostas = [{tipo: ua.tipo, param: ua.param, valor: v}];
+  atualizarMesaVisual();
+}
+
+function totalApostado(){ return apostas.reduce((s,a)=>s+a.valor, 0); }
+
+
+// Retorna todos os números cobertos por uma aposta
+function numerosCobertos(a){
+  if(a.tipo==='numero') return [parseInt(a.param,10)];
+  if(a.tipo==='cor'){
+    if(a.param==='vermelho') return [...VERMELHOS];
+    return Array.from({length:36},(_,i)=>i+1).filter(n=>!VERMELHOS.has(n));
+  }
+  if(a.tipo==='parimpar'){
+    return Array.from({length:36},(_,i)=>i+1).filter(n=>a.param==='par'?n%2===0:n%2!==0);
+  }
+  if(a.tipo==='baixoalto'){
+    return a.param===1?Array.from({length:18},(_,i)=>i+1):Array.from({length:18},(_,i)=>i+19);
+  }
+  if(a.tipo==='duzia'){
+    const base=(a.param-1)*12+1;return Array.from({length:12},(_,i)=>base+i);
+  }
+  return [];
+}
+
+function atualizarMesaVisual(){
+  // Remove todos os destaques
+  document.querySelectorAll('.num-cell,.ext-cell,.zero-cell').forEach(c=>{
+    c.classList.remove('selected','highlighted');
+  });
+
+  apostas.forEach(a=>{
+    // Destaca o botão externo (cor, par/impar, dúzia, etc.)
+    if(a.tipo!=='numero'){
+      const el=document.getElementById('ext_'+a.tipo+'_'+a.param);
+      if(el) el.classList.add('selected');
+    }
+    // Destaca todos os números cobertos na grade
+    const cobertos = numerosCobertos(a);
+    cobertos.forEach(n=>{
+      if(n===0){
+        document.querySelector('.zero-cell')?.classList.add('selected');
+      } else {
+        const el=document.getElementById('nc'+n);
+        if(el) el.classList.add(a.tipo==='numero'?'selected':'highlighted');
+      }
+    });
+  });
+
+  document.getElementById('apostaTxt').textContent = fmt(totalApostado());
+  const bi = document.getElementById('betTypeInfo');
+  if(!apostas.length)
+    bi.innerHTML='<span style="color:var(--text3);">Nenhuma selecionada</span>';
+  else
+    bi.innerHTML='<b>'+apostas.map(descA).join(' + ')+'</b>'
+      +(apostas.length===1?' <span class="odds-badge">'+oddsLbl(apostas[0])+'</span> <span style="color:var(--gold);font-size:.72rem;font-family:Cinzel,serif;font-weight:700;margin-left:.3rem;">'+probLbl(apostas[0])+'</span>':'');
+  // Atualiza highlight na roleta sempre que a aposta muda
+  if(!girando) desenharRoleta(angAtual);
+}
+
+function descA(a){
+  if(a.tipo==='numero') return 'Nº '+a.param;
+  if(a.tipo==='cor') return a.param==='vermelho'?'Vermelho':'Preto';
+  if(a.tipo==='parimpar') return a.param==='par'?'Par':'Ímpar';
+  if(a.tipo==='baixoalto') return a.param===1?'Baixo (1–18)':'Alto (19–36)';
+  if(a.tipo==='duzia') return['','1ª Dúzia','2ª Dúzia','3ª Dúzia'][a.param];
+  return '';
+}
+
+// Odds exibidas com margem de 3% sobre o lucro
+// Número: paga 33.95x o valor apostado como lucro
+// Dúzia:  paga 1.94x o valor apostado como lucro
+// Simples: paga 0.97x o valor apostado como lucro
+function oddsLbl(a){
+  if(a.tipo==='numero') return '33.95:1';
+  if(a.tipo==='duzia')  return '1.94:1';
+  return '0.97:1';
+}
+function probLbl(a){
+  if(a.tipo==='numero')  return '2.70%';
+  if(a.tipo==='duzia')   return '32.43%';
+  return '48.65%';
+}
+
+// ---- CÁLCULO DE GANHO com margem de 3% ----
+// Quando o jogador ganha, o lucro líquido é 97% do valor apostado (a casa fica com 3%)
+// Quando perde, perde o valor inteiro apostado.
+// Para número (35:1 justo): lucro = valor * 35 * 0.97 = valor * 33.95
+// Para dúzia (2:1 justo):   lucro = valor * 2  * 0.97 = valor * 1.94
+// Para simples (1:1 justo): lucro = valor * 1  * 0.97 = valor * 0.97
+function calcGanho(ap, s){
+  const {tipo, param, valor} = ap;
+  const c = corNum(s);
+  const M = 0.97; // margem da casa: jogador recebe 97% do lucro justo
+
+  if(tipo==='numero'){
+    return parseInt(param,10)===s ? valor*35*M : -valor;
+  }
+  if(tipo==='cor'){
+    if(s===0) return -valor;
+    return ((param==='vermelho'&&c==='r')||(param==='preto'&&c==='p')) ? valor*M : -valor;
+  }
+  if(tipo==='parimpar'){
+    if(s===0) return -valor;
+    return ((param==='par'&&s%2===0)||(param==='impar'&&s%2!==0)) ? valor*M : -valor;
+  }
+  if(tipo==='baixoalto'){
+    if(s===0) return -valor;
+    return ((param===1&&s>=1&&s<=18)||(param===2&&s>=19&&s<=36)) ? valor*M : -valor;
+  }
+  if(tipo==='duzia'){
+    if(s===0) return -valor;
+    const acertou = (param===1&&s>=1&&s<=12)||(param===2&&s>=13&&s<=24)||(param===3&&s>=25&&s<=36);
+    return acertou ? valor*2*M : -valor;
+  }
+  return -valor;
+}
+
+function probReal(a){
+  if(a.tipo==='numero') return {num:1,den:37,pct:'2,70%'};
+  if(a.tipo==='cor'||a.tipo==='parimpar'||a.tipo==='baixoalto') return {num:18,den:37,pct:'48,65%'};
+  if(a.tipo==='duzia') return {num:12,den:37,pct:'32,43%'};
+  return {num:1,den:37,pct:'2,70%'};
+}
+
+// ---- GIRO ----
+// Sorteio honesto: a roleta escolhe com probabilidades reais (1/37 cada número)
+// A margem da casa está nos payouts reduzidos, NÃO na manipulação do sorteio
+function girar(){
+  if(girando) return;
+  if(!currentUserId){ mostrarLoginOverlay(); return; }
+  if(!apostas.length){ alert('Faça uma aposta antes de girar.'); return; }
+  const v = totalApostado();
+  if(v < 1){ alert('Valor mínimo de aposta: R$ 1,00.'); return; }
+  if(!Number.isInteger(v)){ alert('Apostas não aceitam centavos. O valor apostado deve ser um número inteiro.'); return; }
+  if(v > saldo){ alert('Saldo insuficiente.'); return; }
+  girando = true;
+  document.getElementById('btnGirar').disabled = true;
+  document.getElementById('btnRepetir').disabled = true;
+  document.getElementById('eduPanel').classList.remove('vis');
+  document.getElementById('rbubble').classList.remove('vis');
+
+  // Sorteio justo (1/37 por número) — margem está no payout
+  const sorteado = SEQ[Math.floor(Math.random() * SEQ.length)];
+
+  const idx = SEQ.indexOf(sorteado);
+  const voltasExtra = (6+Math.floor(Math.random()*5))*2*Math.PI;
+  const angBase = -(idx*FATIA+FATIA/2);
+  const angFinal = angBase - Math.ceil((angBase-angAtual-voltasExtra)/(2*Math.PI))*(2*Math.PI);
+
+  tocarGiro(DURACAO/1000);
+  iniciarCliques(DURACAO/1000);
+  const ini=performance.now(), angIni=angAtual, delta=angFinal-angIni;
+  function ease(t){ return 1-Math.pow(1-t,4); }
+  function frame(now){
+    const t = Math.min((now-ini)/DURACAO,1);
+    angAtual = angIni+delta*ease(t);
+    desenharRoleta(angAtual);
+    if(t<1) requestAnimationFrame(frame);
+    else { angAtual=angFinal; desenharRoleta(angAtual); finalizar(sorteado); }
+  }
+  requestAnimationFrame(frame);
+}
+
+function finalizar(sorteado){
+  clearTimeout(cliqueTmr);
+  let ganhoTotal=0, acertou=false;
+  apostas.forEach(a=>{ const g=calcGanho(a,sorteado); ganhoTotal+=g; if(g>0) acertou=true; });
+// Arredonda o ganho para baixo (floor) garantindo sempre inteiro no banco
+  // Ganho positivo: Math.floor remove frações (casa fica com o restante)
+  // Ganho negativo (perda): já é inteiro pois o valor apostado é sempre inteiro
+  if(ganhoTotal > 0) ganhoTotal = Math.floor(ganhoTotal);
+  const totAp = totalApostado();
+
+  saldo += ganhoTotal;
+  saldo = Math.max(0, Math.floor(saldo));
+
+  // Persiste o novo saldo no Turso e registra movimentação/jogada
+  atualizarCreditosTurso(saldo, ganhoTotal);
+
+  stRodadas++;
+  stApostado += totAp;
+  if(ganhoTotal > 0){ stGanho += ganhoTotal; stAcertos++; } else stPerdido += Math.floor(Math.abs(ganhoTotal));
+
+  const cl = corNum(sorteado);
+  historico.unshift({sorteado, cl, variacao:ganhoTotal, rodada:stRodadas});
+  if(historico.length > MAX_HIST) historico.pop();
+
+  flash(acertou);
+  if(acertou) tocarGanho(); else tocarPerda();
+
+  // Guarda última aposta para o botão Repetir
+  ultimaAposta = {...apostas[0]};
+
+  // Bolha resultado
+  const rb=document.getElementById('rbubble'), rn=document.getElementById('rnum'), rl=document.getElementById('rlbl');
+  const cn={v:'Verde',r:'Vermelho',p:'Preto'}[cl];
+  rn.className='rnum '+cl; rn.textContent=sorteado;
+  rl.innerHTML=`<strong>${cn}</strong>${acertou
+    ?'<span style="color:#4ade80;"> +'+fmt(ganhoTotal)+'</span>'
+    :'<span style="color:#f87171;"> −'+fmt(Math.abs(ganhoTotal))+'</span>'}`;
+  rb.classList.add('vis');
+
+  atualizarSaldo(); atualizarStats(); renderHistorico();
+  mostrarEdu(sorteado, ganhoTotal, totAp);
+
+  if(!alerta50Shown && saldo < SALDO_INI*.5){
+    alerta50Shown = true;
+    document.getElementById('alerta50').classList.add('vis');
+  }
+  if(saldo <= 0){ setTimeout(mostrarGameOver, 800); return; }
+
+  apostas = [];
+  atualizarMesaVisual();
+  girando = false;
+  document.getElementById('btnGirar').disabled = false;
+  document.getElementById('btnRepetir').disabled = false;
+}
+
+// ---- HISTÓRICO TOGGLE ----
+function toggleHistorico(){
+  const btn = document.getElementById('histBtn');
+  const sub = document.getElementById('histSubmenu');
+  const aberto = btn.classList.contains('open');
+  btn.classList.toggle('open', !aberto);
+  sub.classList.toggle('open', !aberto);
+}
+
+// ---- GAME OVER ----
+function mostrarGameOver(){
+  const lucro = saldo - SALDO_INI;
+  document.getElementById('goStats').innerHTML=
+    `<b>Rodadas:</b> ${stRodadas}<br>`+
+    `<b>Total apostado:</b> ${fmt(stApostado)}<br>`+
+    `<b>Total ganho:</b> ${fmt(stGanho)}<br>`+
+    `<b>Total perdido:</b> ${fmt(stPerdido)}<br>`+
+    `<b>Prejuízo final:</b> ${fmt(Math.abs(lucro))}<br>`+
+    `<b>Taxa de acerto:</b> ${stRodadas?((stAcertos/stRodadas)*100).toFixed(1)+'%':'0%'}`;
+  document.getElementById('goTela').classList.add('vis');
+}
+
+function reiniciar(){
+  saldo=SALDO_INI; girando=false; angAtual=0; apostas=[]; historico=[]; ultimaAposta=null;
+  stApostado=stGanho=stPerdido=stRodadas=stAcertos=0; alerta50Shown=false;
+  document.getElementById('goTela').classList.remove('vis');
+  document.getElementById('alerta50').classList.remove('vis');
+  document.getElementById('eduPanel').classList.remove('vis');
+  document.getElementById('rbubble').classList.remove('vis');
+  document.getElementById('apostaInput').value = '';
+  document.getElementById('apostaErro').textContent = '';
+  document.getElementById('btnRepetir').disabled = true;
+  atualizarSaldo(); atualizarStats(); renderHistorico(); atualizarMesaVisual();
+  desenharRoleta(0);
+  document.getElementById('btnGirar').disabled = false;
+  document.getElementById('histList').innerHTML='<div style="font-size:.62rem;color:var(--text3);padding:.15rem 0;">Nenhuma rodada ainda.</div>';
+}
+
+// ---- EDUCACIONAL ----
+function mostrarEdu(sorteado, ganho, apostado){
+  const p = document.getElementById('eduPanel');
+  const cn = {v:'verde',r:'vermelho',p:'preto'}[corNum(sorteado)];
+  let t = `Sorteado: <strong>${sorteado}</strong> (${cn}). `;
+  t += ganho>0
+    ? `Você <strong>ganhou ${fmt(ganho)}</strong>. `
+    : `Você <strong>perdeu ${fmt(Math.abs(ganho))}</strong>. `;
+  t += `<br>House edge ~3% embutida nos payouts. A cada rodada, a casa favorece a si mesma.`;
+  p.innerHTML = t; p.classList.add('vis');
+}
+
+// ---- HELPERS ----
+function atualizarSaldo(){
+  document.getElementById('saldoTxt').textContent = fmt(saldo);
+  // saldoSub é atualizado pelo login/banco; só seta padrão se ainda não logado
+  if(!currentUserId) document.getElementById('saldoSub').textContent = 'Faça login para jogar';
+}
+function atualizarStats(){
+  const lucro = saldo - SALDO_INI;
+  document.getElementById('stApostado').textContent = fmtC(stApostado);
+  document.getElementById('stGanho').textContent = fmtC(stGanho);
+  document.getElementById('stPerdido').textContent = fmtC(stPerdido);
+  const lEl = document.getElementById('stLucro');
+  lEl.textContent = (lucro>=0?'+':'')+fmtC(lucro);
+  lEl.className = 'vl '+(lucro>=0?'pos':'neg');
+  document.getElementById('stRodadas').textContent = stRodadas;
+  document.getElementById('stTaxa').textContent = stRodadas?((stAcertos/stRodadas)*100).toFixed(1)+'%':'0%';
+}
+function renderHistorico(){
+  const ul = document.getElementById('histList');
+  ul.innerHTML = '';
+  if(!historico.length){
+    ul.innerHTML='<div style="font-size:.62rem;color:var(--text3);padding:.15rem 0;">Nenhuma rodada ainda.</div>';
+    return;
+  }
+  historico.forEach(h=>{
+    const d = document.createElement('div'); d.className = 'hrow';
+    const res = h.variacao>=0
+      ? `<span class="hval g">+${fmtC(h.variacao)}</span>`
+      : `<span class="hval l">−${fmtC(Math.abs(h.variacao))}</span>`;
+    d.innerHTML=`<div class="hball ${h.cl}">${h.sorteado}</div><span class="hrnd">#${h.rodada}</span>${res}`;
+    ul.appendChild(d);
+  });
+}
+function flash(ganhou){
+  const el=document.getElementById('flash');
+  el.className='flash '+(ganhou?'ganho':'perda');
+  setTimeout(()=>el.className='flash',700);
+}
+function fmt(v){ return 'R$\u00A0'+Math.abs(v).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function fmtC(v){ const a=Math.abs(v);if(a>=1000)return'R$\u00A0'+(a/1000).toFixed(1)+'k';return'R$\u00A0'+a.toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:0}); }
+
+// ----------------------------------------------------------------
+// TURSO — integração via @libsql/client (WebSocket, sem CORS)
+// ----------------------------------------------------------------
+const TURSO_URL   = 'libsql://teste-141lal141.aws-us-east-1.turso.io';
+const TURSO_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3ODA1MzM2NzEsImlkIjoiMDE5ZThmZmUtYzEwMS03ZDVhLThlNWMtYjFmNTIwY2JiZmM4IiwicmlkIjoiOTRhYmNlZDYtN2Y4Zi00Njk3LTkyNDQtMmJhOTcwNDBkZWM5In0.7ryZDdG1ruLnWvVjsxEX4JPwjIx1e_6ERJyE_--xR2rBcA-fGmOBJ26UjuKaGAlrqDjPgBpos82joQWT7LgFDA';
+
+let db             = null;   // instância do cliente libSQL
+let currentUserId  = null;   // ID numérico (tb_usuario.id)
+let currentUserNome= null;   // nome_usuario
+
+// ── Inicializa o cliente assim que o módulo ESM carregar ───────
+function iniciarDB(){
+  if(window.__libsqlCreateClient){
+    db = window.__libsqlCreateClient({ url: TURSO_URL, authToken: TURSO_TOKEN });
+    console.log('[Turso] cliente inicializado');
+  } else {
+    // Aguarda o módulo ESM terminar de carregar
+    setTimeout(iniciarDB, 80);
+  }
+}
+iniciarDB();
+
+// ── timestamp Unix em segundos ─────────────────────────────────
+function agora(){ return Math.floor(Date.now()/1000); }
+
+// ── helper de query com retry ──────────────────────────────────
+async function dbQuery(sql, args=[]){
+  if(!db) throw new Error('Cliente DB não inicializado');
+  return db.execute({ sql, args });
+}
+
+// ── Tela de login ──────────────────────────────────────────────
+function mostrarLoginOverlay(){
+  document.getElementById('loginOverlay').style.display='flex';
+}
+function fecharLoginOverlay(){
+  document.getElementById('loginOverlay').style.display='none';
+}
+
+async function tentarLogin(){
+  const nomeEl = document.getElementById('loginNome');
+  const errEl  = document.getElementById('loginErro');
+  const btnEl  = document.getElementById('loginBtn');
+  const nome   = nomeEl.value.trim();
+
+  if(!nome){ errEl.textContent='Digite seu nome de usuário.'; return; }
+
+  btnEl.disabled = true;
+  btnEl.textContent = 'Verificando…';
+  errEl.textContent = '';
+
+  try {
+    const res = await dbQuery(
+      'SELECT id, nome, saldo FROM tb_usuario WHERE nome_usuario = ? LIMIT 1',
+      [nome]
+    );
+
+    if(!res.rows || res.rows.length === 0){
+      errEl.textContent = 'Usuário não encontrado. Solicite cadastro ao administrador.';
+      btnEl.disabled = false;
+      btnEl.textContent = 'Entrar';
+      return;
+    }
+
+    const row = res.rows[0];
+    currentUserId   = Number(row.id);
+    currentUserNome = nome;
+    saldo = Number(row.saldo) || 0;
+
+    atualizarSaldo();
+    document.getElementById('saldoSub').textContent = 'Saldo do banco de dados';
+
+    const hEl = document.getElementById('headerUser');
+    if(hEl) hEl.textContent = currentUserNome;
+
+    const syncEl = document.getElementById('syncStatus');
+    if(syncEl){ syncEl.textContent='Logado'; syncEl.style.color='#4ade80'; setTimeout(()=>syncEl.textContent='',3000); }
+
+    fecharLoginOverlay();
+
+  } catch(err){
+    console.error('[Turso] Erro login:', err);
+    errEl.textContent = 'Erro de conexão. Verifique sua internet e tente novamente.';
+    btnEl.disabled = false;
+    btnEl.textContent = 'Entrar';
+  }
+}
+
+// ── LOGOUT (Sair) ────────────────────────────────────────────
+// Encerra APENAS a sessão local do usuário (currentUserId/currentUserNome).
+// NÃO apaga saldo, NÃO apaga histórico, NÃO apaga estatísticas e
+// NÃO realiza nenhuma escrita no banco de dados (Turso). O saldo e o
+// histórico permanecem intactos para quando o usuário logar novamente.
+
+function mostrarTelaSair(){
+  // Sem usuário logado não há sessão para encerrar — apenas mostra o login
+  if(!currentUserId){ mostrarLoginOverlay(); return; }
+
+  const lucro    = saldo - SALDO_INI;
+  const lucroLbl = lucro >= 0 ? 'Lucro da sessão' : 'Prejuízo da sessão';
+  const lucroCor = lucro >= 0 ? 'var(--win)' : 'var(--lose)';
+
+  document.getElementById('sairStats').innerHTML =
+    `<b>Saldo atual:</b> ${fmt(saldo)}<br>`+
+    `<b>Rodadas jogadas:</b> ${stRodadas}<br>`+
+    `<b>Total apostado:</b> ${fmt(stApostado)}<br>`+
+    `<b>${lucroLbl}:</b> <span style="color:${lucroCor};">${fmt(Math.abs(lucro))}</span>`;
+
+  document.getElementById('sairTela').classList.add('vis');
+}
+
+// Cancelar: apenas fecha a tela de confirmação — o jogo continua normalmente,
+// nada é alterado.
+function cancelarSaida(){
+  document.getElementById('sairTela').classList.remove('vis');
+}
+
+// Confirmar saída: fecha a confirmação, encerra a sessão local e volta
+// para a tela de login. Saldo, histórico e estatísticas no banco NÃO
+// são tocados — apenas a referência local ao usuário logado é limpa.
+function confirmarSaida(){
+  document.getElementById('sairTela').classList.remove('vis');
+
+  // Remove apenas a sessão atual (não exclui usuário nem dados do banco)
+  currentUserId   = null;
+  currentUserNome = null;
+
+  // Limpa o nome do usuário e indicadores exibidos no cabeçalho
+  const hEl = document.getElementById('headerUser');
+  if(hEl) hEl.textContent = '';
+  const syncEl = document.getElementById('syncStatus');
+  if(syncEl) syncEl.textContent = '';
+
+  // Apenas atualiza o rótulo (ex.: "Faça login para jogar");
+  // o valor numérico do saldo não é alterado.
+  atualizarSaldo();
+
+  // Limpa os campos da tela de login para o próximo acesso
+  const nomeEl = document.getElementById('loginNome');
+  const errEl  = document.getElementById('loginErro');
+  const btnEl  = document.getElementById('loginBtn');
+  if(nomeEl) nomeEl.value = '';
+  if(errEl)  errEl.textContent = '';
+  if(btnEl){ btnEl.disabled = false; btnEl.textContent = 'Entrar'; }
+
+  // Exibe novamente a tela de login existente.
+  // girar() já verifica "if(!currentUserId)" e impede ações de jogo
+  // sem um novo login — nenhuma alteração foi necessária nessa lógica.
+  mostrarLoginOverlay();
+}
+
+// ── Persiste saldo + registra movimentação e jogada ───────────
+async function atualizarCreditosTurso(novoSaldo, variacaoJogada){
+  if(!currentUserId) return;
+  const syncEl = document.getElementById('syncStatus');
+  if(syncEl){ syncEl.textContent='⏳ Salvando…'; syncEl.style.color='var(--gold)'; }
+  try {
+    const ts = agora();
+
+    // 1. Atualiza saldo do usuário
+    await dbQuery('UPDATE tb_usuario SET saldo = ? WHERE id = ?', [novoSaldo, currentUserId]);
+    await dbQuery('UPDATE tb_jogos SET saldo = saldo + ? WHERE nome = ?', [variacaoJogada*-1, 'roleta']);
+
+    // 2. Insere movimentação
+    const movRes = await dbQuery(
+      'INSERT INTO tb_movimentacoes (valor, data_transacao, fk_usuario) VALUES (?, ?, ?)',
+      [variacaoJogada, ts, currentUserId]
+    );
+
+    // 3. Insere jogada vinculada à movimentação
+    const movId = movRes.lastInsertRowid;
+    if(movId !== undefined && movId !== null){
+      await dbQuery(
+        'INSERT INTO tb_jogada (balanco, data_jogo, fk_movimentacoes) VALUES (?, ?, ?)',
+        [novoSaldo, ts, Number(movId)]
+      );
+    }
+
+    if(syncEl){ syncEl.textContent='Salvo'; syncEl.style.color='#4ade80'; setTimeout(()=>syncEl.textContent='',3000); }
+  } catch(err){
+    console.error('[Turso] Erro ao salvar:', err);
+    if(syncEl){ syncEl.textContent='Erro ao salvar'; syncEl.style.color='#f87171'; setTimeout(()=>syncEl.textContent='',4000); }
+  }
+}
+
+// ---- INIT ----
+construirMesa();
+desenharRoleta(0);
+atualizarSaldo();
+atualizarStats();
+mostrarLoginOverlay();
+
+// ---- DRAWER (menu lateral) ----
+function toggleDrawer(){
+  const drawer=document.getElementById('drawer');
+  const overlay=document.getElementById('drawerOverlay');
+  const tab=document.getElementById('drawerTab');
+  const isOpen=drawer.classList.contains('open');
+  drawer.classList.toggle('open',!isOpen);
+  overlay.classList.toggle('open',!isOpen);
+  tab.style.left=!isOpen?'280px':'0';
+}
+function fecharDrawer(){
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawerOverlay').classList.remove('open');
+  document.getElementById('drawerTab').style.left='0';
+}
+
+// Override da função toggleHistorico (legada) para usar o drawer
+function toggleHistorico(){ toggleDrawer(); }
+
+// ---- PAINEL ADMIN ----
+// Abrir pelo console do navegador digitando:  admin()
+// Ou pressionar:  Ctrl+Shift+A
+function admin(){
+  const p = document.getElementById('adminPanel');
+  p.classList.toggle('vis');
+  // Pré-preenche com o usuário logado se houver
+  if(currentUserNome) document.getElementById('admUser').value = currentUserNome;
+  if(currentUserId)   document.getElementById('admSaldo').value = saldo;
+  document.getElementById('admStatus').textContent = '';
+}
+function adminFechar(){
+  document.getElementById('adminPanel').classList.remove('vis');
+}
+async function adminSalvar(){
+  const nomeInput  = document.getElementById('admUser').value.trim();
+  const novoSaldo  = parseInt(document.getElementById('admSaldo').value, 10);
+  const statusEl   = document.getElementById('admStatus');
+
+  if(!nomeInput){ statusEl.style.color='#f87171'; statusEl.textContent='Informe o nome_usuario.'; return; }
+  if(isNaN(novoSaldo)){ statusEl.style.color='#f87171'; statusEl.textContent='Saldo inválido.'; return; }
+  if(!db){ statusEl.style.color='#f87171'; statusEl.textContent='DB não conectado.'; return; }
+
+  statusEl.style.color='var(--gold)'; statusEl.textContent='⏳ Salvando…';
+  try {
+    // Busca o usuário pelo nome para confirmar que existe
+    const findRes = await dbQuery(
+      'SELECT id, nome FROM tb_usuario WHERE nome_usuario = ? LIMIT 1',
+      [nomeInput]
+    );
+    if(!findRes.rows || findRes.rows.length === 0){
+      statusEl.style.color='#f87171';
+      statusEl.textContent='Usuário "'+nomeInput+'" não encontrado.';
+      return;
+    }
+    const uid = Number(findRes.rows[0].id);
+    const nomeReal = findRes.rows[0].nome;
+
+    // Atualiza o saldo adm
+    await dbQuery('UPDATE tb_usuario SET saldo = ? WHERE id = ?', [novoSaldo, uid]);
+    
+    // Se for o usuário logado atualmente, atualiza a tela também
+    if(uid === currentUserId){
+      saldo = novoSaldo;
+      atualizarSaldo();
+      document.getElementById('saldoSub').textContent = 'Atualizado via admin';
+    }
+
+    statusEl.style.color='#4ade80';
+    statusEl.textContent=`${nomeReal} → R$ ${novoSaldo.toLocaleString('pt-BR')}`;
+  } catch(err){
+    console.error('[Admin] Erro:', err);
+    statusEl.style.color='#f87171';
+    statusEl.textContent='Erro: '+err.message;
+  }
+}
+
+// Atalho de teclado Ctrl+Shift+A
+document.addEventListener('keydown', e=>{
+  if(e.ctrlKey && e.shiftKey && e.key==='A') admin();
+});
+
+
+</script>
+<!-- PAINEL ADMIN (abrir via console: admin()) -->
+<div id="adminPanel">
+  <div class="adm-title">Admin — Editar Banco</div>
+
+  <div class="adm-row">
+    <span class="adm-lbl">Usuário (nome_usuario)</span>
+    <input class="adm-input" id="admUser" placeholder="nome_usuario" />
+  </div>
+  <div class="adm-row">
+    <span class="adm-lbl">Novo saldo (inteiro)</span>
+    <input class="adm-input" id="admSaldo" type="number" placeholder="ex: 1000" />
+  </div>
+
+  <div class="adm-btns">
+    <button class="adm-btn adm-btn-save" onclick="adminSalvar()">Salvar no Banco</button>
+    <button class="adm-btn adm-btn-close" onclick="adminFechar()">×</button>
+  </div>
+  <div class="adm-status" id="admStatus"></div>
+</div>
+
+</body>
+</html>
