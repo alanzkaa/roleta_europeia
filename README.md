@@ -10,6 +10,7 @@ Este projeto foi desenvolvido como **Projeto Integrador em grupo** do curso **Jo
 
 ## Preview
 
+<img width="1919" height="905" alt="image" src="https://github.com/user-attachments/assets/61e5f280-667d-45d3-a812-6f3b474ff459" />
 
 
 ## Usuários de teste
